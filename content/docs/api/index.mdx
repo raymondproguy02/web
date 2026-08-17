@@ -1,0 +1,62 @@
+---
+title: "HTTP API — Overview"
+description: "The `api` repository is a self-hosted HTTP wrapper around the CrydenSync engine. It is not a hosted, multi-tenant service — every deployment is your o"
+---
+
+The `api` repository is a self-hosted HTTP wrapper around the CrydenSync engine. It is not a hosted, multi-tenant service — every deployment is your own instance, connected to your own database, serving only your own application.
+
+## Who this is for
+
+- Developers whose application is not written in Go, and therefore cannot import the `cryden` engine directly.
+- Go developers who want a REST interface anyway (for a frontend SPA, for example) rather than embedding the engine in their own backend.
+
+## Architecture in one sentence
+
+Every HTTP handler is a thin translation layer: parse the request, call the corresponding `cryden.*` engine function, map the result or error to an HTTP response. No authentication logic lives in this repository — it all lives in the engine.
+
+## Base URL and versioning
+
+All endpoints are under a versioned prefix:
+
+```
+https://your-deployment.example.com/v1/...
+```
+
+The `/v1` prefix exists so that a future breaking change to the API contract can be introduced as `/v2` without breaking existing consumers still using `/v1` — the same reasoning that governs the engine's own `/v2` Go module path.
+
+## Response envelope
+
+Every response is one of exactly two shapes.
+
+**Success:**
+```json
+{ "data": { "...": "..." } }
+```
+
+**Error:**
+```json
+{ "error": { "code": "invalid_credentials", "message": "invalid email or password" } }
+```
+
+`code` is a stable string, safe to branch on programmatically. `message` is a human-readable string and must never be parsed by client code — its exact wording is not part of the contract and may change. See [errors.md](/docs/api/errors) for the complete list of codes.
+
+## Authentication
+
+Authenticated endpoints require an `Authorization: Bearer <access_token>` header. The access token is the short-lived JWT returned by `/v1/login` or `/v1/refresh`.
+
+## CORS
+
+The API requires an explicit, non-wildcard list of allowed origins, configured via the `CORS_ORIGINS` environment variable. There is no permissive default — an API that hands out authentication tokens should never allow requests from an unknown origin by default.
+
+## Rate limiting
+
+Two independent layers apply:
+- The engine's own per-user rate limiting on login and signup specifically.
+- The API's own coarser, per-IP rate limiting across the entire surface (see [rate-limiting.md](/docs/api/rate-limiting)).
+
+## See also
+
+- [endpoints.md](/docs/api/endpoints) — every endpoint, request/response shape
+- [authentication.md](/docs/api/authentication) — the auth flow in detail, including token refresh and reuse detection over HTTP
+- [errors.md](/docs/api/errors) — the complete error code reference
+- [rate-limiting.md](/docs/api/rate-limiting) — both rate limiting layers explained
